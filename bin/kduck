@@ -29,12 +29,20 @@ def cmd_status(args, cfg):
     """Muestra el estado actual del audio y del servicio KDuck."""
     engine = DuckingEngine()
     current_vol = engine.get_current_volume()
+    state = engine.load_state()
 
     print("🦆 ESTADO DE KDUCK (AUTO-DUCKING INTELIGENTE)")
     print("=" * 55)
     print(f"Configuración:      {CONFIG_FILE}")
-    print(f"Volumen actual:     {int(current_vol * 100)}%")
-    print(f"Nivel de atenuación: {cfg.get('duck_volume_percent', 20)}%")
+    print(f"Volumen actual:     {int(round(current_vol * 100))}%")
+
+    if state.get("is_ducked") and state.get("original_volume") is not None:
+        orig = int(round(float(state["original_volume"]) * 100))
+        print(f"Estado de ducking:  📉 Atenuado (Volumen original guardado: {orig}%)")
+    else:
+        print("Estado de ducking:  🟢 Normal (Sin atenuar)")
+
+    print(f"Nivel configurado:  {cfg.get('duck_volume_percent', 20)}%")
     print(f"Rampa Ataque/Salida:{cfg.get('attack_ramp_ms', 350)}ms / {cfg.get('release_ramp_ms', 500)}ms")
 
     # Comprobar servicio systemd
@@ -52,21 +60,20 @@ def cmd_duck(args, cfg):
     percent = args.percent if args.percent is not None else cfg.get("duck_volume_percent", 20)
     engine = DuckingEngine()
     attack_ms = cfg.get("attack_ramp_ms", 350)
-    engine.start_ducking(duck_percent=percent, attack_ms=attack_ms)
-    print(f"📉 Audio atenuado al {percent}% (Rampa: {attack_ms}ms).")
+    # wait=True para asegurar que la rampa termine antes de salir del CLI
+    engine.start_ducking(duck_percent=percent, attack_ms=attack_ms, wait=True)
+    curr = engine.get_current_volume()
+    print(f"📉 Audio atenuado al {int(round(curr * 100))}% (Rampa: {attack_ms}ms completada).")
 
 
 def cmd_unduck(args, cfg):
     """Restaura el audio al volumen original."""
     engine = DuckingEngine()
-    # Si no tiene original guardado en memoria en una ejecución CLI separada, lee volumen actual y sube proporcionalmente
     release_ms = cfg.get("release_ramp_ms", 500)
+    # wait=True para asegurar que la rampa termine antes de salir del CLI
+    engine.stop_ducking(release_ms=release_ms, wait=True)
     curr = engine.get_current_volume()
-    target = min(1.0, curr * (100.0 / max(1, cfg.get("duck_volume_percent", 20))))
-    engine.original_volume = target
-    engine.is_ducked = True
-    engine.stop_ducking(release_ms=release_ms)
-    print(f"📈 Audio restaurado al {int(target*100)}% (Rampa: {release_ms}ms).")
+    print(f"📈 Audio restaurado al {int(round(curr * 100))}% (Rampa: {release_ms}ms completada).")
 
 
 def cmd_watch(args, cfg):

@@ -20,17 +20,23 @@ from mpris_controller import MprisController
 
 class TestKDuck(unittest.TestCase):
     def test_ducking_engine_state(self):
-        engine = DuckingEngine()
-        self.assertFalse(engine.is_ducked)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            engine = DuckingEngine()
+            engine.state_file = Path(tmpdir) / "state.json"
 
-        # Mocking or testing state logic
-        engine.original_volume = 0.50
-        engine.is_ducked = True
-        self.assertTrue(engine.is_ducked)
+            state = engine.load_state()
+            self.assertFalse(state.get("is_ducked"))
 
-        # Test volume clamping
-        engine.set_volume(1.5)  # should clamp without error
-        engine.set_volume(-0.5) # should clamp without error
+            # Test volume clamping
+            engine.set_volume(1.5)  # should clamp without error
+            engine.set_volume(-0.5) # should clamp without error
+
+            # Test state saving
+            engine.save_state({"is_ducked": True, "original_volume": 0.50, "ducked_volume": 0.20})
+            loaded = engine.load_state()
+            self.assertTrue(loaded["is_ducked"])
+            self.assertEqual(loaded["original_volume"], 0.50)
+            self.assertEqual(loaded["ducked_volume"], 0.20)
 
     def test_config_parsing(self):
         with tempfile.NamedTemporaryFile("w+", suffix=".toml") as tmp:
