@@ -2,11 +2,12 @@
 # SPDX-FileCopyrightText: 2026 Cesar <yugurta@gmail.com>
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-monitor.py: Monitor continuo de flujos de audio y llamadas para KDuck.
+monitor.py: Monitor reactivo de baja latencia para flujos de audio y llamadas en KDuck.
 """
 
 import time
 import json
+import select
 import subprocess
 from typing import Dict, Any, List
 
@@ -57,12 +58,11 @@ class AudioMonitor:
         try:
             import dbus
             bus = dbus.SessionBus()
-            # Buscar dispositivos emparejados
             for name in bus.list_names():
                 if "kdeconnect" in name:
                     try:
-                        obj = bus.get_object("org.kde.kdeconnect", "/modules/kdeconnect")
-                        # Si kdeconnect emite estado de llamada
+                        obj = bus.get_object(name, "/modules/kdeconnect/telephony")
+                        # Telephony activo
                     except Exception:
                         pass
         except Exception:
@@ -70,12 +70,28 @@ class AudioMonitor:
         return False
 
     def run_loop(self, stop_flag: List[bool] = None):
-        """Bucle de monitorización reactiva de baja latencia."""
-        print("🎧 KDuck activo: vigilando flujos de audio de PipeWire...")
+        """Bucle de monitorización reactiva basada en eventos de PipeWire con select()."""
+        print("🎧 KDuck activo: vigilando flujos de audio de PipeWire de forma reactiva...")
         last_comm_state = False
+
+        # Iniciar suscripción a eventos de audio de PipeWire/PulseAudio
+        proc = subprocess.Popen(
+            ["pactl", "subscribe"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True
+        )
 
         try:
             while stop_flag is None or not stop_flag[0]:
+                # Bloquear de forma eficiente con select() hasta recibir un evento relevante o timeout de 3s
+                r, _, _ = select.select([proc.stdout], [], [], 3.0)
+                if r:
+                    line = proc.stdout.readline()
+                    # Solo nos interesan cambios en flujos de reproducción/grabación o servidores
+                    if not any(token in line for token in ["sink-input", "source-output", "source #", "sink #"]):
+                        continue
+
                 comm_active = self.is_communication_active() or self.is_kdeconnect_call_active()
 
                 if comm_active and not last_comm_state:
@@ -92,7 +108,7 @@ class AudioMonitor:
                         self.mpris.resume_players()
                     last_comm_state = False
 
-                time.sleep(0.5)
-
         finally:
+            proc.terminate()
+            proc.wait()
             self.engine.reset_on_exit()
