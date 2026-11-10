@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Cesar <yugurta@gmail.com>
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""
+kduck: CLI de control y monitorización de Auto-Ducking para PipeWire & WirePlumber 0.5.
+"""
+
+import sys
+import os
+import argparse
+import subprocess
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = SCRIPT_DIR.parent
+if (PROJECT_DIR / "src").exists():
+    LIB_DIR = PROJECT_DIR
+else:
+    LIB_DIR = Path.home() / ".local/share/kduck"
+
+sys.path.insert(0, str(LIB_DIR / "src"))
+
+from config import load_config, ensure_config_exists, CONFIG_FILE
+from ducking_engine import DuckingEngine
+from monitor import AudioMonitor
+
+
+def cmd_status(args, cfg):
+    """Muestra el estado actual del audio y del servicio KDuck."""
+    engine = DuckingEngine()
+    current_vol = engine.get_current_volume()
+
+    print("🦆 ESTADO DE KDUCK (AUTO-DUCKING INTELIGENTE)")
+    print("=" * 55)
+    print(f"Configuración:      {CONFIG_FILE}")
+    print(f"Volumen actual:     {int(current_vol * 100)}%")
+    print(f"Nivel de atenuación: {cfg.get('duck_volume_percent', 20)}%")
+    print(f"Rampa Ataque/Salida:{cfg.get('attack_ramp_ms', 350)}ms / {cfg.get('release_ramp_ms', 500)}ms")
+
+    # Comprobar servicio systemd
+    res = subprocess.run(
+        ["systemctl", "--user", "is-active", "kduck.service"],
+        capture_output=True, text=True
+    )
+    status = res.stdout.strip()
+    icon = "🟢" if status == "active" else "⚪"
+    print(f"Servicio systemd:   {icon} {status} (kduck.service)")
+
+
+def cmd_duck(args, cfg):
+    """Atenúa manualmente el audio al porcentaje especificado."""
+    percent = args.percent if args.percent is not None else cfg.get("duck_volume_percent", 20)
+    engine = DuckingEngine()
+    attack_ms = cfg.get("attack_ramp_ms", 350)
+    engine.start_ducking(duck_percent=percent, attack_ms=attack_ms)
+    print(f"📉 Audio atenuado al {percent}% (Rampa: {attack_ms}ms).")
+
+
+def cmd_unduck(args, cfg):
+    """Restaura el audio al volumen original."""
+    engine = DuckingEngine()
+    # Si no tiene original guardado en memoria en una ejecución CLI separada, lee volumen actual y sube proporcionalmente
+    release_ms = cfg.get("release_ramp_ms", 500)
+    curr = engine.get_current_volume()
+    target = min(1.0, curr * (100.0 / max(1, cfg.get("duck_volume_percent", 20))))
+    engine.original_volume = target
+    engine.is_ducked = True
+    engine.stop_ducking(release_ms=release_ms)
+    print(f"📈 Audio restaurado al {int(target*100)}% (Rampa: {release_ms}ms).")
+
+
+def cmd_watch(args, cfg):
+    """Inicia el monitor en segundo plano (daemon mode)."""
+    monitor = AudioMonitor(cfg)
+    monitor.run_loop()
+
+
+def cmd_edit(args, cfg):
+    """Abre el archivo de configuración en el editor predeterminado."""
+    target = ensure_config_exists()
+    editor = os.environ.get("EDITOR", "xdg-open")
+    subprocess.run([editor, str(target)])
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="kduck: Auto-Ducking Inteligente para PipeWire & WirePlumber 0.5"
+    )
+    subparsers = parser.add_subparsers(dest="command", help="Comandos disponibles")
+
+    # status
+    subparsers.add_parser("status", help="Muestra el estado del volumen y del demonio")
+
+    # duck
+    p_duck = subparsers.add_parser("duck", help="Atenúa manualmente el audio")
+    p_duck.add_argument("percent", nargs="?", type=int, default=None, help="Porcentaje de volumen (ej. 20)")
+
+    # unduck
+    subparsers.add_parser("unduck", help="Restaura manualmente el volumen original")
+
+    # watch
+    subparsers.add_parser("watch", help="Inicia el monitor en segundo plano")
+
+    # edit
+    subparsers.add_parser("edit", help="Edita el archivo de configuración (config.toml)")
+
+    parser.add_argument("-v", "--version", action="version", version="KDuck 1.0.0")
+
+    args = parser.parse_args()
+
+    ensure_config_exists()
+    cfg = load_config()
+
+    if args.command == "duck":
+        cmd_duck(args, cfg)
+    elif args.command == "unduck":
+        cmd_unduck(args, cfg)
+    elif args.command == "watch":
+        cmd_watch(args, cfg)
+    elif args.command == "status":
+        cmd_status(args, cfg)
+    elif args.command == "edit":
+        cmd_edit(args, cfg)
+    else:
+        cmd_status(args, cfg)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,13 @@
+[Unit]
+Description=KDuck: Intelligent Auto-Ducking for PipeWire & WirePlumber 0.5
+Documentation=https://github.com/cesarconte/kduck
+After=pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/kduck watch
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=KDuck
+GenericName=Auto-Ducking de Audio
+Comment=Atenuación inteligente de volumen multimedia ante llamadas y voz en PipeWire / WirePlumber
+Exec=kduck status
+Icon=audio-volume-high
+Terminal=true
+Categories=AudioVideo;Audio;Utility;
+Keywords=audio;ducking;pipewire;wireplumber;mpris;volume;
+StartupNotify=false
