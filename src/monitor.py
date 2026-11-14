@@ -24,7 +24,7 @@ class AudioMonitor:
         self.attack_ms = int(config.get("attack_ramp_ms", 350))
         self.release_ms = int(config.get("release_ramp_ms", 500))
         self.pause_mpris = bool(config.get("pause_mpris_on_calls", True))
-        self.ignore_clients = config.get("ignore_clients", ["kwin_wayland", "libcanberra", "easyeffects"])
+        self.ignore_clients = config.get("ignore_clients", ["kwin_wayland", "libcanberra", "easyeffects", "pw-record", "pw-cat"])
 
     def is_communication_active(self) -> bool:
         """Comprueba si hay un flujo de comunicación o llamada activo en PipeWire."""

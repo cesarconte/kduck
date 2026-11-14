@@ -9,3 +9,4 @@ Terminal=true
 Categories=AudioVideo;Audio;Utility;
 Keywords=audio;ducking;pipewire;wireplumber;mpris;volume;
 StartupNotify=false
+NoDisplay=true
