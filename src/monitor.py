@@ -24,7 +24,7 @@ class AudioMonitor:
         self.attack_ms = int(config.get("attack_ramp_ms", 350))
         self.release_ms = int(config.get("release_ramp_ms", 500))
         self.pause_mpris = bool(config.get("pause_mpris_on_calls", True))
-        self.ignore_clients = config.get("ignore_clients", ["kwin_wayland", "libcanberra", "easyeffects", "pw-record", "pw-cat"])
+        self.ignore_clients = config.get("ignore_clients", ["kwin_wayland", "libcanberra", "easyeffects", "pw-record", "pw-cat", "kity", "org.cesar.kity", "kity-voice-capture"])
 
     def is_communication_active(self) -> bool:
         """Comprueba si hay un flujo de comunicación o llamada activo en PipeWire."""
@@ -43,7 +43,7 @@ class AudioMonitor:
             node_name = props.get("node.name", "")
 
             # Ignorar clientes excluidos
-            if any(ign in app_name or ign in node_name for ign in self.ignore_clients):
+            if any(ign.lower() in app_name.lower() or ign.lower() in node_name.lower() for ign in self.ignore_clients):
                 continue
 
             # Detectar llamadas de voz, WebRTC, VoIP
